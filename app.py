@@ -285,16 +285,17 @@ def main_ui():
     # Document upload/processing section
     with st.container():
         st.subheader("Add Context Documents")
-        uploaded_file = st.file_uploader("Upload a text file (.txt)", type="txt")
+        uploaded_files = st.file_uploader("Upload text files (.txt)", type="txt", accept_multiple_files=True)
         github_url = st.text_input("Enter a GitHub raw `.txt` or `.md` URL:")
 
-        if uploaded_file:
-            file_contents = uploaded_file.read().decode("utf-8")
-            if st.button("Process File"):
-                with st.spinner("Processing file..."):
-                    documents = split_documents(file_contents)
-                    process_and_store_documents(documents)
-                    st.success("File processed! You can now ask questions about its content.")
+        if uploaded_files:
+            if st.button("Process Files"):
+                with st.spinner("Processing files..."):
+                    for uploaded_file in uploaded_files:
+                        file_contents = uploaded_file.read().decode("utf-8")
+                        documents = split_documents(file_contents)
+                        process_and_store_documents(documents)
+                    st.success("All files processed and stored successfully! You can now ask questions about their content.")
 
         if github_url and is_valid_github_raw_url(github_url):
             if st.button("Process URL"):
