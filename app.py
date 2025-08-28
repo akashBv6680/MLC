@@ -9,6 +9,16 @@ import time
 from datetime import datetime, timedelta
 import re
 import shutil
+import chromadb
+from sentence_transformers import SentenceTransformer
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+# Explicitly import pysqlite3 to ensure compatibility with chromadb
+try:
+    __import__('pysqlite3')
+    sys.modules['sqlite3'] = sys.modules['pysqlite3']
+except ImportError:
+    st.error("pysqlite3 is not installed. Please add 'pysqlite3-binary' to your requirements.txt.")
 
 # --- Constants and Configuration ---
 COLLECTION_NAME = "rag_documents"
@@ -42,14 +52,6 @@ def initialize_dependencies():
     This function is wrapped in a try/except block to handle dependency errors.
     """
     try:
-        # Explicitly import pysqlite3 and set it as the sqlite3 module
-        __import__('pysqlite3')
-        sys.modules['sqlite3'] = sys.modules['pysqlite3']
-        
-        # Now import chromadb and SentenceTransformer
-        import chromadb
-        from sentence_transformers import SentenceTransformer
-        
         db_path = get_db_path()
         db_client = chromadb.PersistentClient(path=db_path)
         model = SentenceTransformer("all-MiniLM-L6-v2")
@@ -63,7 +65,6 @@ def initialize_dependencies():
         )
         st.stop()
     except Exception as e:
-        # This will catch the RuntimeError from chromadb if it fails its version check
         st.error(
             f"An error occurred during dependency initialization: {e}. "
             "This may be due to an incompatible SQLite version. "
@@ -142,7 +143,6 @@ def clear_chroma_data():
 
 def split_documents(text_data, chunk_size=500, chunk_overlap=100):
     """Splits a single string of text into chunks."""
-    from langchain_text_splitters import RecursiveCharacterTextSplitter
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
@@ -201,7 +201,8 @@ def rag_pipeline(query, selected_language_code):
     relevant_docs = retrieve_documents(query)
     
     context = "\n".join(relevant_docs)
-    prompt = f"Using the following information, answer the question in {selected_language_code}:\n\nContext: {context}\n\nQuestion: {query}\n\nAnswer:"
+    # The updated prompt explicitly states the output language
+    prompt = f"Using the following information, answer the user's question. The final response MUST be in {st.session_state.selected_language}. If the information is not present, state that you cannot answer. \n\nContext: {context}\n\nQuestion: {query}\n\nAnswer:"
     
     response_json = call_together_api(prompt)
 
