@@ -7,18 +7,8 @@ import json
 import requests
 import time
 from datetime import datetime, timedelta
-from sentence_transformers import SentenceTransformer
-import chromadb
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 import re
 import shutil
-
-# Explicitly import pysqlite3 to ensure compatibility with chromadb
-try:
-    __import__('pysqlite3')
-    sys.modules['sqlite3'] = sys.modules['pysqlite3']
-except ImportError:
-    st.error("pysqlite3 is not installed. Please add 'pysqlite3-binary' to your requirements.txt.")
 
 # --- Constants and Configuration ---
 COLLECTION_NAME = "rag_documents"
@@ -46,20 +36,53 @@ LANGUAGE_DICT = {
     "Turkish": "tr"
 }
 
+def initialize_dependencies():
+    """
+    Initializes and returns the ChromaDB client and SentenceTransformer model.
+    This function is wrapped in a try/except block to handle dependency errors.
+    """
+    try:
+        # Explicitly import pysqlite3 and set it as the sqlite3 module
+        __import__('pysqlite3')
+        sys.modules['sqlite3'] = sys.modules['pysqlite3']
+        
+        # Now import chromadb and SentenceTransformer
+        import chromadb
+        from sentence_transformers import SentenceTransformer
+        
+        db_path = get_db_path()
+        db_client = chromadb.PersistentClient(path=db_path)
+        model = SentenceTransformer("all-MiniLM-L6-v2")
+        
+        return db_client, model
+
+    except ImportError as e:
+        st.error(
+            "A required library is not installed. "
+            "Please ensure you have 'pysqlite3-binary' in your requirements.txt file."
+        )
+        st.stop()
+    except Exception as e:
+        # This will catch the RuntimeError from chromadb if it fails its version check
+        st.error(
+            f"An error occurred during dependency initialization: {e}. "
+            "This may be due to an incompatible SQLite version. "
+            "Please ensure 'pysqlite3-binary' is in your requirements.txt file "
+            "and deployed correctly."
+        )
+        st.stop()
+        
 def get_db_path():
     """Returns a unique temporary path for the ChromaDB directory."""
     if "db_path" not in st.session_state:
         st.session_state.db_path = tempfile.mkdtemp()
     return st.session_state.db_path
 
-def initialize_chroma_client():
-    """Initializes and returns a ChromaDB client."""
-    db_path = get_db_path()
-    return chromadb.PersistentClient(path=db_path)
-
-def get_sentence_transformer_model():
-    """Initializes and returns the SentenceTransformer model."""
-    return SentenceTransformer("all-MiniLM-L6-v2")
+def get_collection():
+    """Retrieves or creates the ChromaDB collection."""
+    return st.session_state.db_client.get_or_create_collection(
+        name=COLLECTION_NAME
+    )
 
 def call_together_api(prompt, max_retries=5):
     """
@@ -117,14 +140,9 @@ def clear_chroma_data():
     except Exception as e:
         st.error(f"Error clearing collection: {e}")
 
-def get_collection():
-    """Retrieves or creates the ChromaDB collection."""
-    return st.session_state.db_client.get_or_create_collection(
-        name=COLLECTION_NAME
-    )
-
 def split_documents(text_data, chunk_size=500, chunk_overlap=100):
     """Splits a single string of text into chunks."""
+    from langchain_text_splitters import RecursiveCharacterTextSplitter
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
@@ -182,7 +200,6 @@ def rag_pipeline(query, selected_language_code):
 
     relevant_docs = retrieve_documents(query)
     
-    # Create the grounded prompt for the LLM, instructing it to respond in the selected language
     context = "\n".join(relevant_docs)
     prompt = f"Using the following information, answer the question in {selected_language_code}:\n\nContext: {context}\n\nQuestion: {query}\n\nAnswer:"
     
@@ -227,7 +244,6 @@ def main_ui():
     # Sidebar
     with st.sidebar:
         st.header("RAG Chat Flow")
-        # Language selection dropdown
         st.session_state.selected_language = st.selectbox(
             "Select a Language",
             options=list(LANGUAGE_DICT.keys()),
@@ -260,6 +276,11 @@ def main_ui():
     st.title("RAG Chat Flow")
     st.markdown("---")
 
+    # Initialize dependencies outside of the main UI block to prevent re-initialization
+    if 'db_client' not in st.session_state or 'model' not in st.session_state:
+        st.session_state.db_client, st.session_state.model = initialize_dependencies()
+
+
     # Document upload/processing section
     with st.container():
         st.subheader("Add Context Documents")
@@ -291,12 +312,6 @@ def main_ui():
     
     if 'messages' not in st.session_state:
         st.session_state.messages = []
-    
-    if 'db_client' not in st.session_state:
-        db_path = get_db_path()
-        st.session_state.db_client = chromadb.PersistentClient(path=db_path)
-    if 'model' not in st.session_state:
-        st.session_state.model = SentenceTransformer("all-MiniLM-L6-v2")
     
     if 'chat_history' not in st.session_state:
         st.session_state.chat_history = {}
