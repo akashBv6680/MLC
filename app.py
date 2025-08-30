@@ -13,12 +13,7 @@ import chromadb
 from sentence_transformers import SentenceTransformer
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-# Explicitly import pysqlite3 to ensure compatibility with chromadb
-try:
-    __import__('pysqlite3')
-    sys.modules['sqlite3'] = sys.modules['pysqlite3']
-except ImportError:
-    st.error("pysqlite3 is not installed. Please add 'pysqlite3-binary' to your requirements.txt.")
+
 
 # --- Constants and Configuration ---
 COLLECTION_NAME = "rag_documents"
