@@ -49,22 +49,27 @@ LANGUAGE_DICT = {
 def initialize_dependencies():
     """
     Initializes and returns the ChromaDB client and SentenceTransformer model.
+    This function is wrapped in a try/except block to handle dependency errors.
     """
     try:
         db_path = get_db_path()
         db_client = chromadb.PersistentClient(path=db_path)
-        
-        # Corrected: Explicitly load the model to the CPU to avoid meta tensor errors
-        # This is the key fix for the "Cannot copy out of meta tensor" error
-        model = SentenceTransformer("all-MiniLM-L6-v2", device='cpu')
+        model = SentenceTransformer("all-MiniLM-L6-v2")
         
         return db_client, model
 
+    except ImportError as e:
+        st.error(
+            "A required library is not installed. "
+            "Please ensure you have 'pysqlite3-binary' in your requirements.txt file."
+        )
+        st.stop()
     except Exception as e:
-        # The error message has been corrected to show the actual error
         st.error(
             f"An error occurred during dependency initialization: {e}. "
-            "This may be due to an incompatible library version or resource limitation."
+            "This may be due to an incompatible SQLite version. "
+            "Please ensure 'pysqlite3-binary' is in your requirements.txt file "
+            "and deployed correctly."
         )
         st.stop()
         
