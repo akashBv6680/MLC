@@ -19,6 +19,7 @@ try:
     sys.modules['sqlite3'] = sys.modules['pysqlite3']
 except ImportError:
     st.error("pysqlite3 is not installed. Please add 'pysqlite3-binary' to your requirements.txt.")
+    st.stop() # Stops the app if the required library is missing
 
 # --- Constants and Configuration ---
 COLLECTION_NAME = "rag_documents"
@@ -46,30 +47,22 @@ LANGUAGE_DICT = {
     "Turkish": "tr"
 }
 
+@st.cache_resource
 def initialize_dependencies():
     """
     Initializes and returns the ChromaDB client and SentenceTransformer model.
+    Using @st.cache_resource ensures this runs only once.
     """
     try:
-        db_path = get_db_path()
+        db_path = tempfile.mkdtemp()
         db_client = chromadb.PersistentClient(path=db_path)
-        
         # Explicitly load the model to the CPU to avoid PyTorch-related errors
         model = SentenceTransformer("all-MiniLM-L6-v2", device='cpu')
-        
         return db_client, model
-
     except Exception as e:
-        # Show the actual error for better debugging
         st.error(f"An error occurred during dependency initialization: {e}.")
         st.stop()
         
-def get_db_path():
-    """Returns a unique temporary path for the ChromaDB directory."""
-    if "db_path" not in st.session_state:
-        st.session_state.db_path = tempfile.mkdtemp()
-    return st.session_state.db_path
-
 def get_collection():
     """Retrieves or creates the ChromaDB collection."""
     return st.session_state.db_client.get_or_create_collection(
@@ -87,7 +80,6 @@ def call_together_api(prompt, max_retries=5):
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {TOGETHER_API_KEY}"
             }
-
             payload = {
                 "model": "mistralai/Mistral-7B-Instruct-v0.2",
                 "messages": [
@@ -103,7 +95,6 @@ def call_together_api(prompt, max_retries=5):
                 "temperature": 0.7,
                 "max_tokens": 1024
             }
-
             response = requests.post(TOGETHER_API_URL, headers=headers, data=json.dumps(payload))
             response.raise_for_status()
             
@@ -183,16 +174,15 @@ def retrieve_documents(query, n_results=5):
 
 def rag_pipeline(query, selected_language_code):
     """
-    Executes the full RAG pipeline with language support.
+    Executes the full RAG pipeline with a check for documents.
     """
     collection = get_collection()
     if collection.count() == 0:
-        return "Please upload a document or provide a GitHub raw URL before asking questions."
+        return "Hey there! I'm a chatbot that answers questions based on documents you provide. Please upload a `.txt` file or enter a GitHub raw URL in the section above before asking me anything. I'm ready when you are! 😊"
 
     relevant_docs = retrieve_documents(query)
     
     context = "\n".join(relevant_docs)
-    # The updated prompt explicitly states the output language
     prompt = f"Using the following information, answer the user's question. The final response MUST be in {st.session_state.selected_language}. If the information is not present, state that you cannot answer. \n\nContext: {context}\n\nQuestion: {query}\n\nAnswer:"
     
     response_json = call_together_api(prompt)
@@ -267,11 +257,10 @@ def main_ui():
     # Main content area
     st.title("RAG Chat Flow")
     st.markdown("---")
-
+    
     # Initialize dependencies outside of the main UI block to prevent re-initialization
     if 'db_client' not in st.session_state or 'model' not in st.session_state:
         st.session_state.db_client, st.session_state.model = initialize_dependencies()
-
 
     # Document upload/processing section
     with st.container():
