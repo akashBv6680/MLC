@@ -1,20 +1,3 @@
-import os
-import sys
-
-# Set the environment variable before any other imports
-os.environ['CHROMA_SERVER_NO_DATABASE_CLIENT_CHECK'] = '1' 
-# This tells ChromaDB to skip the database client version check, 
-# relying on the pysqlite3 library you've installed.
-
-# Now, add your existing workaround
-try:
-    __import__('pysqlite3')
-    sys.modules['sqlite3'] = sys.modules['pysqlite3']
-except ImportError:
-    pass # The requirements.txt should handle this, so it won't fail here.
-
-
-
 import streamlit as st
 import os
 import sys
@@ -30,7 +13,12 @@ import chromadb
 from sentence_transformers import SentenceTransformer
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-
+# Explicitly import pysqlite3 to ensure compatibility with chromadb
+try:
+    __import__('pysqlite3')
+    sys.modules['sqlite3'] = sys.modules['pysqlite3']
+except ImportError:
+    st.error("pysqlite3 is not installed. Please add 'pysqlite3-binary' to your requirements.txt.")
 
 # --- Constants and Configuration ---
 COLLECTION_NAME = "rag_documents"
@@ -61,27 +49,22 @@ LANGUAGE_DICT = {
 def initialize_dependencies():
     """
     Initializes and returns the ChromaDB client and SentenceTransformer model.
-    This function is wrapped in a try/except block to handle dependency errors.
     """
     try:
         db_path = get_db_path()
         db_client = chromadb.PersistentClient(path=db_path)
-        model = SentenceTransformer("all-MiniLM-L6-v2")
+        
+        # Corrected: Explicitly load the model to the CPU to avoid meta tensor errors
+        # This is the key fix for the "Cannot copy out of meta tensor" error
+        model = SentenceTransformer("all-MiniLM-L6-v2", device='cpu')
         
         return db_client, model
 
-    except ImportError as e:
-        st.error(
-            "A required library is not installed. "
-            "Please ensure you have 'pysqlite3-binary' in your requirements.txt file."
-        )
-        st.stop()
     except Exception as e:
+        # The error message has been corrected to show the actual error
         st.error(
             f"An error occurred during dependency initialization: {e}. "
-            "This may be due to an incompatible SQLite version. "
-            "Please ensure 'pysqlite3-binary' is in your requirements.txt file "
-            "and deployed correctly."
+            "This may be due to an incompatible library version or resource limitation."
         )
         st.stop()
         
