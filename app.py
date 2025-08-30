@@ -1,3 +1,20 @@
+import os
+import sys
+
+# Set the environment variable before any other imports
+os.environ['CHROMA_SERVER_NO_DATABASE_CLIENT_CHECK'] = '1' 
+# This tells ChromaDB to skip the database client version check, 
+# relying on the pysqlite3 library you've installed.
+
+# Now, add your existing workaround
+try:
+    __import__('pysqlite3')
+    sys.modules['sqlite3'] = sys.modules['pysqlite3']
+except ImportError:
+    pass # The requirements.txt should handle this, so it won't fail here.
+
+
+
 import streamlit as st
 import os
 import sys
