@@ -9,17 +9,19 @@ import time
 from datetime import datetime, timedelta
 import re
 import shutil
-import chromadb
-from sentence_transformers import SentenceTransformer
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-# Explicitly import pysqlite3 to ensure compatibility with chromadb
+# This block MUST be at the very top to fix the sqlite3 version issue.
 try:
     __import__('pysqlite3')
     sys.modules['sqlite3'] = sys.modules['pysqlite3']
 except ImportError:
     st.error("pysqlite3 is not installed. Please add 'pysqlite3-binary' to your requirements.txt.")
-    st.stop() # Stops the app if the required library is missing
+    st.stop()
+
+# Now import chromadb and other libraries
+import chromadb
+from sentence_transformers import SentenceTransformer
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 # --- Constants and Configuration ---
 COLLECTION_NAME = "rag_documents"
